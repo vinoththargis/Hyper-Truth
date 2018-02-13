@@ -1,0 +1,103 @@
+#
+# Copyright Altoros. All Rights Reserved.
+#
+
+version: '2'
+
+services:
+
+  ca.d.example.com:
+    container_name: ca.d.example.com
+    image: hyperledger/fabric-ca:x86_64-1.1.0-preview
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_CERTFILE=/etc/hyperledger/fabric-ca-server-config/ca.d.example.com-cert.pem
+      - FABRIC_CA_SERVER_CA_KEYFILE=/etc/hyperledger/fabric-ca-server-config/ded26841e2da617a63a9c004337c71f51426c0ae32a8d66ed035f949051008fc_sk
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server-config/ca.d.example.com-cert.pem
+      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server-config/ded26841e2da617a63a9c004337c71f51426c0ae32a8d66ed035f949051008fc_sk
+#    ports:
+#      - 9055:7054
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../artifacts/crypto-config/peerOrganizations/d.example.com/ca/:/etc/hyperledger/fabric-ca-server-config
+      - ../artifacts/fabric-ca-server-config-d.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml
+
+  peer0.d.example.com:
+    container_name: peer0.d.example.com
+    extends:
+      file:   base.yaml
+      service: peer-base
+    environment:
+      - CORE_PEER_ID=peer0.d.example.com
+      - CORE_PEER_LOCALMSPID=dMSP
+      - CORE_PEER_ADDRESS=peer0.d.example.com:7051
+    ports:
+      - 9052:7051
+      - 9054:7053
+    volumes:
+        - ../artifacts/crypto-config/peerOrganizations/d.example.com/peers/peer0.d.example.com/:/etc/hyperledger/crypto/peer
+    depends_on:
+      - ca.d.example.com
+    
+
+  peer1.d.example.com:
+    container_name: peer1.d.example.com
+    extends:
+      file:   base.yaml
+      service: peer-base
+    environment:
+      - CORE_PEER_ID=peer1.d.example.com
+      - CORE_PEER_LOCALMSPID=dMSP
+      - CORE_PEER_ADDRESS=peer1.d.example.com:7051
+    ports:
+      - 9057:7051
+      - 9059:7053
+    volumes:
+        - ../artifacts/crypto-config/peerOrganizations/d.example.com/peers/peer1.d.example.com/:/etc/hyperledger/crypto/peer
+    depends_on:
+      - ca.d.example.com
+    
+
+  # fabric-rest api server
+  api.d.example.com:
+    extends:
+      file: base.yaml
+      service: api-base
+    container_name: api.d.example.com
+    ports:
+      - 4003:4000
+    environment:
+      - ORG=d
+      - PORT=4000
+    depends_on:
+      - peer0.d.example.com
+      - peer1.d.example.com
+    
+
+  cli.example.com:
+    container_name: cli.example.com
+    extends:
+      file: base.yaml
+      service: cli-base
+    volumes:
+      - ../artifacts/crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls:/etc/hyperledger/crypto/orderer/tls
+
+  cli.d.example.com:
+    container_name: cli.d.example.com
+    extends:
+      service: cli.example.com
+    environment:
+      - CORE_PEER_LOCALMSPID=dMSP
+    volumes:
+        - ../artifacts/crypto-config/peerOrganizations/d.example.com/users/Admin@d.example.com:/etc/hyperledger/crypto/peer
+    
+
+  # simple http server to disseminate certificates
+  www.d.example.com:
+    extends:
+      file: base.yaml
+      service: www-base
+    container_name: www.d.example.com
+    ports:
+      - 8084:80
